@@ -1,148 +1,41 @@
-export type ToolArgs = Record<string, unknown>;
+import * as todoTools from "../features/todos/tools.js";
+import * as validation from "../utils/validation.js";
+import type * as featureTypes from "../features/types.js";
 
-export type AgentToolDefinition = {
-  type: "function";
-  function: {
-    name: string;
-    description: string;
-    parameters: {
-      type: "object";
-      properties: Record<string, unknown>;
-      required?: string[];
-      additionalProperties?: boolean;
-    };
-  };
-};
+export type ToolArgs = featureTypes.ToolArgs;
+export type AgentToolDefinition = featureTypes.AgentToolDefinition;
+export type ToolExecutor = featureTypes.ToolExecutor;
+export type AgentFeature = featureTypes.AgentFeature;
 
-export const TOOL_DEFINITIONS: AgentToolDefinition[] = [
-  {
-    type: "function" as const,
-    function: {
-      name: "add",
-      description: "Add two numbers.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "First number"
-          },
-          b: {
-            type: "number",
-            description: "Second number"
-          }
-        },
-        required: ["a", "b"],
-        additionalProperties: false
-      }
-    }
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "subtract",
-      description: "Subtract second number from first number.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "First number"
-          },
-          b: {
-            type: "number",
-            description: "Second number"
-          }
-        },
-        required: ["a", "b"],
-        additionalProperties: false
-      }
-    }
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "multiply",
-      description: "Multiply two numbers.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "First number"
-          },
-          b: {
-            type: "number",
-            description: "Second number"
-          }
-        },
-        required: ["a", "b"],
-        additionalProperties: false
-      }
-    }
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "divide",
-      description: "Divide first number by second number.",
-      parameters: {
-        type: "object",
-        properties: {
-          a: {
-            type: "number",
-            description: "Numerator"
-          },
-          b: {
-            type: "number",
-            description: "Denominator"
-          }
-        },
-        required: ["a", "b"],
-        additionalProperties: false
-      }
-    }
-  }
+export const TOOL_FEATURES: AgentFeature[] = [
+  todoTools.TODO_FEATURE
 ];
 
-export type ToolExecutor = (args: ToolArgs) => Promise<string>;
+export const TOOL_DEFINITIONS: AgentToolDefinition[] = TOOL_FEATURES.flatMap(
+  (feature) => feature.toolDefinitions
+);
 
-function readOperands(args: ToolArgs): { a: number; b: number } {
-  const a = Number(args.a);
-  const b = Number(args.b);
+export const TOOL_EXECUTORS: Record<string, ToolExecutor> = Object.assign(
+  {},
+  ...TOOL_FEATURES.map((feature) => feature.toolExecutors)
+);
 
-  if (Number.isNaN(a) || Number.isNaN(b)) {
-    throw new Error("Both 'a' and 'b' must be valid numbers.");
-  }
+export const TOOL_FEATURE_SUMMARY = TOOL_FEATURES.map((feature) => {
+  const toolNames = feature.toolDefinitions
+    .map((toolDefinition) => toolDefinition.function.name)
+    .join(", ");
 
-  return { a, b };
-}
-
-export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
-  add: async (args) => {
-    const { a, b } = readOperands(args);
-    return String(a + b);
-  },
-  subtract: async (args) => {
-    const { a, b } = readOperands(args);
-    return String(a - b);
-  },
-  multiply: async (args) => {
-    const { a, b } = readOperands(args);
-    return String(a * b);
-  },
-  divide: async (args) => {
-    const { a, b } = readOperands(args);
-    if (b === 0) {
-      throw new Error("Division by zero is not allowed.");
-    }
-    return String(a / b);
-  }
-};
+  return `- ${feature.name}: ${feature.description} Tools: ${toolNames}`;
+}).join("\n");
 
 export async function executeTool(name: string, rawArgs: string): Promise<string> {
   try {
-    const parsedArgs = (rawArgs ? JSON.parse(rawArgs) : {}) as ToolArgs;
+    const parsedJson = rawArgs ? JSON.parse(rawArgs) : {};
+    if (!validation.isObject(parsedJson)) {
+      throw new Error("Tool arguments must be a JSON object.");
+    }
+
+    const parsedArgs = parsedJson as ToolArgs;
     const executor = TOOL_EXECUTORS[name];
     if (!executor) {
       return JSON.stringify({ error: `Unknown tool: ${name}` }, null, 2);

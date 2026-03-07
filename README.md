@@ -16,6 +16,7 @@ npm link
 
 ```env
 OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=your-open-ai-model
 ```
 
 4. Start a new session:

@@ -56,3 +56,11 @@ export function getActiveSessionId(): string {
 export function getSessionStatePath(sessionId: string): string {
   return path.join(BASE_DIR, sessionId, "state.json");
 }
+
+export function getSessionDir(sessionId: string): string {
+  return path.join(BASE_DIR, sessionId);
+}
+
+export function getActiveSessionDir(): string {
+  return getSessionDir(getActiveSessionId());
+}
