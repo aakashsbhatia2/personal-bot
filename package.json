@@ -1,0 +1,31 @@
+{
+  "name": "bhabert-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "agent": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/index.ts",
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "dotenv": "^17.3.1",
+    "execa": "^9.6.1",
+    "fs": "^0.0.1-security",
+    "openai": "^6.25.0",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
