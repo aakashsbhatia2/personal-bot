@@ -16,7 +16,7 @@ export type AgentToolDefinition = {
 
 export type ToolExecutor = (args: ToolArgs) => Promise<string>;
 
-export type AgentFeature = {
+export type AgentPower = {
   name: string;
   description: string;
   toolDefinitions: AgentToolDefinition[];

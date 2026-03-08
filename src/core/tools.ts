@@ -1,31 +1,33 @@
-import * as todoTools from "../features/todos/tools.js";
+import * as todoTools from "../powers/todos/tools.js";
+import * as timeTools from "../powers/time/tools.js";
 import * as validation from "../utils/validation.js";
-import type * as featureTypes from "../features/types.js";
+import type * as powerTypes from "../powers/types.js";
 
-export type ToolArgs = featureTypes.ToolArgs;
-export type AgentToolDefinition = featureTypes.AgentToolDefinition;
-export type ToolExecutor = featureTypes.ToolExecutor;
-export type AgentFeature = featureTypes.AgentFeature;
+export type ToolArgs = powerTypes.ToolArgs;
+export type AgentToolDefinition = powerTypes.AgentToolDefinition;
+export type ToolExecutor = powerTypes.ToolExecutor;
+export type AgentPower = powerTypes.AgentPower;
 
-export const TOOL_FEATURES: AgentFeature[] = [
-  todoTools.TODO_FEATURE
+export const TOOL_POWERS: AgentPower[] = [
+  timeTools.TIME_POWER,
+  todoTools.TODO_POWER
 ];
 
-export const TOOL_DEFINITIONS: AgentToolDefinition[] = TOOL_FEATURES.flatMap(
-  (feature) => feature.toolDefinitions
+export const TOOL_DEFINITIONS: AgentToolDefinition[] = TOOL_POWERS.flatMap(
+  (power) => power.toolDefinitions
 );
 
 export const TOOL_EXECUTORS: Record<string, ToolExecutor> = Object.assign(
   {},
-  ...TOOL_FEATURES.map((feature) => feature.toolExecutors)
+  ...TOOL_POWERS.map((power) => power.toolExecutors)
 );
 
-export const TOOL_FEATURE_SUMMARY = TOOL_FEATURES.map((feature) => {
-  const toolNames = feature.toolDefinitions
+export const TOOL_POWER_SUMMARY = TOOL_POWERS.map((power) => {
+  const toolNames = power.toolDefinitions
     .map((toolDefinition) => toolDefinition.function.name)
     .join(", ");
 
-  return `- ${feature.name}: ${feature.description} Tools: ${toolNames}`;
+  return `- ${power.name}: ${power.description} Tools: ${toolNames}`;
 }).join("\n");
 
 export async function executeTool(name: string, rawArgs: string): Promise<string> {

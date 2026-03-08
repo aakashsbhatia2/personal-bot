@@ -3,7 +3,7 @@ import path from "path";
 import * as openAIClient from "../../core/openaiClient.js";
 import * as sessionManager from "../../sessions/sessionManager.js";
 import * as validation from "../../utils/validation.js";
-import type * as featureTypes from "../types.js";
+import type * as powerTypes from "../types.js";
 
 type TodoStatus = "open" | "completed";
 
@@ -73,7 +73,7 @@ function writeTodos(todos: TodoItem[]): void {
   fs.writeFileSync(getTodoFilePath(), JSON.stringify(todos, null, 2));
 }
 
-function readTodoTitle(args: featureTypes.ToolArgs): string {
+function readTodoTitle(args: powerTypes.ToolArgs): string {
   if (!validation.isNonEmptyString(args.title)) {
     throw new Error("'title' must be a non-empty string.");
   }
@@ -123,7 +123,7 @@ async function resolveTodoTitleWithAI(todos: TodoItem[], requestedTitle: string)
   return matchedTitle ?? null;
 }
 
-function readStatusFilter(args: featureTypes.ToolArgs): TodoStatus | "all" {
+function readStatusFilter(args: powerTypes.ToolArgs): TodoStatus | "all" {
   if (args.status === undefined) {
     return "all";
   }
@@ -164,7 +164,7 @@ async function findTodoByTitle(todos: TodoItem[], title: string): Promise<TodoIt
   return resolvedTodo;
 }
 
-const todoToolDefinitions: featureTypes.AgentToolDefinition[] = [
+const todoToolDefinitions: powerTypes.AgentToolDefinition[] = [
   {
     type: "function",
     function: {
@@ -239,7 +239,7 @@ const todoToolDefinitions: featureTypes.AgentToolDefinition[] = [
   }
 ];
 
-const todoToolExecutors: Record<string, featureTypes.ToolExecutor> = {
+const todoToolExecutors: Record<string, powerTypes.ToolExecutor> = {
   create_todo: async (args) => {
     const title = readTodoTitle(args);
     const todos = readTodos();
@@ -291,8 +291,8 @@ const todoToolExecutors: Record<string, featureTypes.ToolExecutor> = {
   }
 };
 
-export const TODO_FEATURE: featureTypes.AgentFeature = {
-  name: "Todo Management",
+export const TODO_POWER: powerTypes.AgentPower = {
+  name: "Todo Power",
   description: "Create, list, complete, and delete session-scoped todos.",
   toolDefinitions: todoToolDefinitions,
   toolExecutors: todoToolExecutors
