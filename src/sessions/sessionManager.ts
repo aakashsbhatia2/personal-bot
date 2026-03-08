@@ -4,11 +4,20 @@ import path from "path";
 const BASE_DIR = ".agent-sessions";
 const ACTIVE_FILE = path.join(BASE_DIR, ".active");
 
+export type SessionTaskHistoryEntry = {
+  instruction: string;
+  prompt: string;
+  toolsUsed: string[];
+  response: string;
+  runAt: string;
+};
+
 export type SessionState = {
   sessionId: string;
   context: string;
   iteration: number;
   createdAt: string;
+  taskHistory?: SessionTaskHistoryEntry[];
 };
 
 export function createSession(context: string): string {
@@ -31,7 +40,8 @@ export function createSession(context: string): string {
     sessionId,
     context,
     iteration: 0,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    taskHistory: []
   };
 
   fs.writeFileSync(

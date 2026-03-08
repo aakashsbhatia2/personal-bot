@@ -292,8 +292,16 @@ const todoToolExecutors: Record<string, powerTypes.ToolExecutor> = {
 };
 
 export const TODO_POWER: powerTypes.AgentPower = {
+  id: "todos",
   name: "Todo Power",
   description: "Create, list, complete, and delete session-scoped todos.",
+  routingDescription: "creating, listing, completing, deleting, and checking session todos, task lists, and actionable items",
+  systemPrompt: [
+    "Todo rules:",
+    "- Refer to todos by title, not by numeric ids.",
+    "- If the user refers to a todo indirectly, inspect the todo state before deciding what to do.",
+    "- For bulk todo actions, inspect the current todo list first and then perform the required sequence of tool calls."
+  ].join("\n"),
   toolDefinitions: todoToolDefinitions,
   toolExecutors: todoToolExecutors
 };

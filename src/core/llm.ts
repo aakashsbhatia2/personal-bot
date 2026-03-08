@@ -3,39 +3,59 @@ import * as tools from "./tools.js";
 import * as validation from "../utils/validation.js";
 
 type ConversationMessage = {
-  role: "system" | "user" | "assistant" | "tool";
+  role: "system" | "developer" | "user" | "assistant" | "tool";
   content?: string | null;
   tool_calls?: unknown;
   tool_call_id?: string;
 };
 
+type TaskRequest = {
+  sessionContext: string;
+  instruction: string;
+};
+
+export type TaskExecutionResult = {
+  response: string;
+  prompt: string;
+  toolsUsed: string[];
+};
+
+type RouterDecision = {
+  powerIds: string[];
+  reason: string;
+};
+
 const MAX_TOOL_ROUNDS = 3;
+
+const ROUTER_SYSTEM_PROMPT = `
+Role:
+You are a task router for an autonomous local agent.
+
+Available powers:
+${tools.TOOL_ROUTING_SUMMARY}
+
+Instructions:
+- Read the user's instruction and select only the powers required to solve it.
+- Return zero powers if the task can be answered directly without tools.
+- Return multiple powers only when the task clearly needs them together.
+- Never include a power unless it is actually relevant.
+
+Output:
+Return strict JSON with this shape:
+{"powerIds":["power_id"],"reason":"short reason"}
+`.trim();
 
 export const SYSTEM_PROMPT = `
 Role:
 You are an autonomous agent that can answer directly or use tools when needed.
-
-Available powers and tools:
-${tools.TOOL_POWER_SUMMARY}
-
-Decision process:
-1) Understand the user's goal.
-2) Decide whether the answer can be given directly or requires tools.
-3) If tools are needed, use the minimum tools required.
-4) If no single tool is enough, combine multiple tool calls to complete the request.
-5) Only report actions and facts that are supported by successful tool calls or clear prompt context.
 
 State rules:
 - If the answer depends on current real-world state, use the relevant tool instead of guessing.
 - If the answer depends on stored local state, use the relevant tool instead of guessing.
 - Prefer tools over assumptions whenever state may have changed.
 
-Todo rules:
-- Refer to todos by title, not by numeric ids.
-- If the user refers to a todo indirectly, inspect the todo state before deciding what to do.
-- For bulk todo actions, inspect the current todo list first and then perform the required sequence of tool calls.
-
 Tool rules:
+- Use only the tools provided for this request.
 - You may chain multiple tool calls in a single request.
 - Do not claim a tool action succeeded unless the tool call actually succeeded.
 - Never invent tool outputs.
@@ -50,6 +70,35 @@ Output format:
 - Steps taken and tools used if any
 - Final answer
 `.trim();
+
+function buildSystemPrompt(selectedPowers: tools.AgentPower[]): string {
+  return SYSTEM_PROMPT;
+}
+
+function buildPowerContextPrompt(selectedPowers: tools.AgentPower[]): string {
+  const powerSummary = selectedPowers.length > 0
+    ? tools.getPowerSummary(selectedPowers)
+    : "No tools are available for this request. Answer directly from prompt context only.";
+  const powerSpecificInstructions = selectedPowers
+    .map((power) => power.systemPrompt.trim())
+    .filter((systemPrompt) => systemPrompt.length > 0)
+    .join("\n\n");
+
+  return [
+    powerSpecificInstructions,
+    `Available powers and tools for this request:\n${powerSummary}`
+  ].filter((section) => section.trim().length > 0).join("\n\n");
+}
+
+function buildUserPrompt(task: TaskRequest): string {
+  return `
+Session Context:
+${task.sessionContext}
+
+Instruction:
+${task.instruction}
+`.trim();
+}
 
 function readTextContent(content: unknown): string {
   if (validation.isString(content)) {
@@ -80,11 +129,117 @@ function readTextContent(content: unknown): string {
     .join("\n");
 }
 
-export async function askLLM(prompt: string) {
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .toLocaleLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 3)
+  );
+}
+
+function fallbackRouteTask(instruction: string): RouterDecision {
+  const instructionTokens = tokenize(instruction);
+  const scoredPowers = tools.TOOL_POWERS
+    .map((power) => {
+      const routingText = [
+        power.id,
+        power.name,
+        power.description,
+        power.routingDescription,
+        ...power.toolDefinitions.map((toolDefinition) => toolDefinition.function.name),
+        ...power.toolDefinitions.map((toolDefinition) => toolDefinition.function.description)
+      ].join(" ");
+      const routingTokens = tokenize(routingText);
+      let score = 0;
+
+      for (const token of instructionTokens) {
+        if (routingTokens.has(token)) {
+          score += 1;
+        }
+      }
+
+      return { powerId: power.id, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return {
+    powerIds: scoredPowers.map((entry) => entry.powerId),
+    reason: scoredPowers.length > 0
+      ? "Fallback routing matched the request text to power metadata."
+      : "Fallback routing found no power-specific signals."
+  };
+}
+
+function parseRouterDecision(content: string): RouterDecision | null {
+  const trimmedContent = content.trim();
+  const jsonCandidate = trimmedContent.match(/\{[\s\S]*\}/)?.[0];
+  if (!jsonCandidate) {
+    return null;
+  }
+
+  try {
+    const parsedJson = JSON.parse(jsonCandidate);
+    if (!validation.isObject(parsedJson)) {
+      return null;
+    }
+
+    const powerIds = validation.hasOwnProperty(parsedJson, "powerIds") && validation.isArray(parsedJson.powerIds)
+      ? parsedJson.powerIds.filter(validation.isString)
+      : [];
+    const reason = validation.hasOwnProperty(parsedJson, "reason") && validation.isString(parsedJson.reason)
+      ? parsedJson.reason
+      : "";
+
+    return { powerIds, reason };
+  } catch {
+    return null;
+  }
+}
+
+async function routeTask(instruction: string): Promise<RouterDecision> {
+  try {
+    const response = await openAIClient.openAIClient.chat.completions.create({
+      model: openAIClient.OPENAI_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: ROUTER_SYSTEM_PROMPT
+        },
+        {
+          role: "user",
+          content: instruction
+        }
+      ]
+    });
+
+    const content = readTextContent(response.choices[0]?.message?.content);
+    const parsedDecision = parseRouterDecision(content);
+    if (parsedDecision) {
+      return parsedDecision;
+    }
+  } catch {
+    // Fall through to metadata-based routing.
+  }
+
+  return fallbackRouteTask(instruction);
+}
+
+export async function askLLM(task: TaskRequest) {
+  const routingDecision = await routeTask(task.instruction);
+  const selectedPowers = tools.findPowersByIds(routingDecision.powerIds);
+  const toolDefinitions = tools.getToolDefinitionsForPowers(selectedPowers);
+  const prompt = buildUserPrompt(task);
+  const toolsUsed: string[] = [];
   const messages: ConversationMessage[] = [
     {
       role: "system",
-      content: SYSTEM_PROMPT
+      content: buildSystemPrompt(selectedPowers)
+    },
+    {
+      role: "developer",
+      content: buildPowerContextPrompt(selectedPowers)
     },
     {
       role: "user",
@@ -93,16 +248,25 @@ export async function askLLM(prompt: string) {
   ];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const response = await openAIClient.openAIClient.chat.completions.create({
-      model: openAIClient.OPENAI_MODEL,
-      messages: messages as never,
-      tools: tools.TOOL_DEFINITIONS as never,
-      tool_choice: "auto"
-    });
+    const response = toolDefinitions.length > 0
+      ? await openAIClient.openAIClient.chat.completions.create({
+        model: openAIClient.OPENAI_MODEL,
+        messages: messages as never,
+        tools: toolDefinitions as never,
+        tool_choice: "auto"
+      })
+      : await openAIClient.openAIClient.chat.completions.create({
+        model: openAIClient.OPENAI_MODEL,
+        messages: messages as never
+      });
 
     const message = response.choices[0]?.message;
     if (!message) {
-      return "";
+      return {
+        response: "",
+        prompt,
+        toolsUsed
+      };
     }
 
     messages.push({
@@ -112,13 +276,19 @@ export async function askLLM(prompt: string) {
     });
 
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      return readTextContent(message.content).trim();
+      return {
+        response: readTextContent(message.content).trim(),
+        prompt,
+        toolsUsed
+      };
     }
 
     for (const toolCall of message.tool_calls) {
       if (toolCall.type !== "function") {
         continue;
       }
+
+      toolsUsed.push(toolCall.function.name);
 
       const result = await tools.executeTool(
         toolCall.function.name,
@@ -133,5 +303,9 @@ export async function askLLM(prompt: string) {
     }
   }
 
-  return "I couldn't complete the request within the tool execution limit.";
+  return {
+    response: "I couldn't complete the request within the tool execution limit.",
+    prompt,
+    toolsUsed
+  };
 }

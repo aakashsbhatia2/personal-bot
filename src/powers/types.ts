@@ -17,8 +17,11 @@ export type AgentToolDefinition = {
 export type ToolExecutor = (args: ToolArgs) => Promise<string>;
 
 export type AgentPower = {
+  id: string;
   name: string;
   description: string;
+  routingDescription: string;
+  systemPrompt: string;
   toolDefinitions: AgentToolDefinition[];
   toolExecutors: Record<string, ToolExecutor>;
 };

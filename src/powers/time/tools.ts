@@ -84,8 +84,16 @@ const timeToolExecutors: Record<string, powerTypes.ToolExecutor> = {
 };
 
 export const TIME_POWER: powerTypes.AgentPower = {
+  id: "time",
   name: "Time Power",
   description: "Answer current local time, date, and timezone questions.",
+  routingDescription: "current local time, date, day, timezone, and other time-related factual questions",
+  systemPrompt: [
+    "Time rules:",
+    "- Use time tools for current local time, date, or timezone instead of guessing.",
+    "- Report local time facts directly and concisely.",
+    "- Do not infer a different timezone unless the tool output says so."
+  ].join("\n"),
   toolDefinitions: timeToolDefinitions,
   toolExecutors: timeToolExecutors
 };
