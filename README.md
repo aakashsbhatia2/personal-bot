@@ -35,9 +35,32 @@ agent start -t "Your project context"
 agent task "Your instruction"
 ```
 
+6. Start interactive chat with the active session:
+
+```bash
+agent chat
+```
+
+## Agent Chat
+
+Operations:
+
+- Start an interactive conversation with the active session
+- Send multiple prompts without re-running the CLI command each time
+- Use the same routed powers during chat requests
+
 ## Powers
 
 ### Calendar Power
+
+The calendar power uses the official Google Calendar API client and reads OAuth credentials directly from environment variables. The app does not generate or store refresh tokens for you.
+
+Required environment variables:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REFRESH_TOKEN`
+- `GOOGLE_CALENDAR_ID`
 
 Operations:
 
@@ -59,20 +82,11 @@ Operations:
 
 ### Todo Power
 
+Todos are stored locally for the active session in `.agent-sessions/<session-id>/todos.json`.
+
 Operations:
 
 - Create todos
 - List todos
 - Complete todos
 - Delete todos
-
-## Google Calendar
-
-The calendar power uses the official Google Calendar API client and reads OAuth credentials directly from environment variables. The app does not generate or store refresh tokens for you.
-
-Required environment variables:
-
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REFRESH_TOKEN`
-- `GOOGLE_CALENDAR_ID`
